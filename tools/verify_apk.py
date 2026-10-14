@@ -14,7 +14,7 @@ def verify(path: Path) -> None:
         assert "assets/index.android.bundle" in names, "Missing standalone JS bundle"
         assert apk.getinfo("assets/index.android.bundle").file_size > 100_000, "Empty game bundle"
         for abi in ("arm64-v8a", "x86_64"):
-            for library in ("libreactnative.so", "librnskia.so"):
+            for library in ("libreactnative.so",):
                 assert f"lib/{abi}/{library}" in names, f"Missing {abi}/{library}"
             assert any(
                 f"lib/{abi}/{library}" in names
@@ -23,6 +23,7 @@ def verify(path: Path) -> None:
         assert sum(name.endswith(".ttf") for name in names) >= 4, "Missing bundled fonts"
         assert sum(name.endswith(".wav") for name in names) >= 11, "Missing bundled sound effects"
         assert any(name.endswith(".m4a") for name in names), "Missing bundled music"
+        assert not any("librnskia" in name for name in names), "Obsolete canvas renderer was bundled"
     print(f"Standalone APK verified: {path.name}, {path.stat().st_size:,} bytes")
 
 

@@ -1,5 +1,6 @@
 import { GAME, toDeg } from './constants';
 import type { Rng } from './rng';
+import { anomalyFor, type Anomaly, type GameMode } from './modes';
 
 /**
  * Nabız oyun motoru: React'ten bağımsız, saf fonksiyonlar.
@@ -16,6 +17,14 @@ import type { Rng } from './rng';
 export type Direction = 1 | -1;
 
 export interface Round {
+  mode: GameMode;
+  anomaly: Anomaly;
+  baseSpeed: number;
+  baseWidth: number;
+  lives: number;
+  focus: number;
+  focused: boolean;
+  decoyTarget: number | null;
   anchorAngle: number;
   anchorTime: number;
   dir: Direction;
@@ -42,21 +51,25 @@ export type MissOutcome = Extract<TapOutcome, { kind: 'miss' }>;
 
 const nextGap = (rng: Rng) => GAME.minGap + rng() * GAME.gapRange;
 
-export function createRound(now: number, rng: Rng): Round {
+export function createRound(now: number, rng: Rng, mode: GameMode = 'classic'): Round {
   const dir: Direction = 1;
+  const speed = mode === 'zen' ? 1.55 : GAME.startSpeed;
+  const width = mode === 'zen' ? 0.85 : GAME.startWidth;
   return {
+    mode, anomaly: 'none', baseSpeed: speed, baseWidth: width,
+    lives: mode === 'chaos' ? 3 : 1, focus: 0, focused: false, decoyTarget: null,
     anchorAngle: GAME.startAngle,
     anchorTime: now + GAME.startGraceMs,
     dir,
-    speed: GAME.startSpeed,
+    speed,
     target: GAME.startAngle + dir * nextGap(rng),
-    width: GAME.startWidth,
+    width,
     score: 0,
     combo: 0,
     bestCombo: 0,
     hits: 0,
     perfects: 0,
-    shields: GAME.shieldsPerRound,
+    shields: mode === 'zen' || mode === 'chaos' ? 0 : GAME.shieldsPerRound,
   };
 }
 
@@ -78,17 +91,23 @@ export function lateLimitTime(r: Round): number {
 }
 
 /** Yön değiştirir ve yeni hedefi kurar. Puanlı isabette oyun da hızlanır. */
-function advance(r: Round, t: number, rng: Rng, escalate: boolean): Round {
+function advance(r: Round, t: number, rng: Rng, escalate: boolean, hits = r.hits): Round {
   const angle = angleAt(r, t);
-  const dir = (r.dir === 1 ? -1 : 1) as Direction;
+  const dir = (r.anomaly === 'mirror' ? r.dir : -r.dir) as Direction;
+  const baseSpeed = escalate && r.mode !== 'zen' ? Math.min(r.baseSpeed * GAME.speedMultiplier, GAME.maxSpeed) : r.baseSpeed;
+  const baseWidth = escalate && r.mode !== 'zen' ? Math.max(r.baseWidth * GAME.widthMultiplier, GAME.minWidth) : r.baseWidth;
+  const anomaly = r.mode === 'chaos' ? anomalyFor(hits) : 'none';
+  const gap = nextGap(rng);
   return {
     ...r,
     anchorAngle: angle,
     anchorTime: t,
     dir,
-    target: angle + dir * nextGap(rng),
-    speed: escalate ? Math.min(r.speed * GAME.speedMultiplier, GAME.maxSpeed) : r.speed,
-    width: escalate ? Math.max(r.width * GAME.widthMultiplier, GAME.minWidth) : r.width,
+    target: angle + dir * gap,
+    decoyTarget: anomaly === 'decoy' ? angle + dir * gap * 0.45 : null,
+    baseSpeed, baseWidth, anomaly, focused: false,
+    speed: Math.min(baseSpeed * (anomaly === 'surge' ? 1.25 : 1), GAME.maxSpeed),
+    width: anomaly === 'wide' ? Math.min(baseWidth * 1.65, 0.95) : baseWidth,
   };
 }
 
@@ -102,8 +121,8 @@ export function resolveTap(r: Round, t: number, rng: Rng): { round: Round; outco
   if (distance <= half) {
     const perfect = distance <= half * GAME.perfectRatio;
     const combo = perfect ? r.combo + 1 : 0;
-    const points = perfect ? 1 + combo : 1;
-    const next = advance(r, t, rng, true);
+    const points = (perfect ? 1 + combo : 1) * (r.anomaly === 'surge' ? 2 : 1);
+    const next = advance(r, t, rng, true, r.hits + 1);
     return {
       round: {
         ...next,
@@ -112,6 +131,7 @@ export function resolveTap(r: Round, t: number, rng: Rng): { round: Round; outco
         bestCombo: Math.max(r.bestCombo, combo),
         hits: r.hits + 1,
         perfects: r.perfects + (perfect ? 1 : 0),
+        focus: Math.min(5, r.focus + (perfect ? 1 : 0)),
       },
       outcome: { kind: 'hit', perfect, points, combo },
     };
@@ -130,6 +150,23 @@ export function resolveTap(r: Round, t: number, rng: Rng): { round: Round; outco
     round: r,
     outcome: { kind: 'miss', offDeg: toDeg(distance - half), timing: offset < 0 ? 'early' : 'late' },
   };
+}
+
+/** A miss costs one Kaos life; practice continues without penalizing records. */
+export function recoverMiss(r: Round, t: number, rng: Rng): Round | null {
+  if (r.mode !== 'zen' && (r.mode !== 'chaos' || r.lives <= 1)) return null;
+  const next = advance(r, t, rng, false);
+  return { ...next, lives: r.mode === 'zen' ? r.lives : r.lives - 1, combo: 0, anchorTime: t + GAME.startGraceMs };
+}
+
+/** Slow only the current leg; its clock is re-anchored to prevent a jump. */
+export function activateFocus(r: Round, t: number): Round | null {
+  if (r.focus < 5 || r.focused || t < r.anchorTime || t >= lateLimitTime(r)) return null;
+  return { ...r, anchorAngle: angleAt(r, t), anchorTime: t, speed: r.speed * 0.48, focus: 0, focused: true };
+}
+
+export function decoyAngle(r: Round): number | null {
+  return r.decoyTarget;
 }
 
 /** Hiç dokunmadan hedefi kaçırınca oluşan sonuç. */

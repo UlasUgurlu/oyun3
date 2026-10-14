@@ -1,4 +1,4 @@
-import { Alert, Modal, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { Settings } from '../game/progression';
@@ -20,7 +20,8 @@ const ROWS: { key: keyof Settings; label: string; hint: string }[] = [
   { key: 'music', label: 'Müzik', hint: 'Kalp atışı ritmiyle akan arka plan müziği' },
   { key: 'haptics', label: 'Titreşim', hint: 'İsabet ve kaçırmalarda hafif titreşim' },
   { key: 'screenShake', label: 'Ekran sarsıntısı', hint: 'Hareket hassasiyetin varsa kapat' },
-  { key: 'motion', label: '3B eğim hareketi', hint: 'Telefonu eğince sahne de döner' },
+  { key: 'motion', label: 'İsabet animasyonları', hint: 'Kısa nabız dalgaları ve skor hareketi' },
+  { key: 'lowPower', label: 'Pil dostu mod', hint: 'Ek hareketleri kapatır, oyun daha hafif çalışır' },
 ];
 
 export function SettingsSheet({ visible, theme, settings, onChange, onResetProgress, onClose }: Props) {
@@ -35,7 +36,7 @@ export function SettingsSheet({ visible, theme, settings, onChange, onResetProgr
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
       <Pressable style={styles.scrim} onPress={onClose} accessibilityLabel="Ayarları kapat" />
-      <View style={[styles.sheet, { backgroundColor: theme.surface, paddingBottom: insets.bottom + 20 }]}>
+      <ScrollView style={[styles.sheet, { backgroundColor: theme.surface }]} contentContainerStyle={{ padding: 24, gap: 14, paddingBottom: insets.bottom + 20 }}>
         <Text style={[styles.title, { color: theme.text }]}>Ayarlar</Text>
         {ROWS.map((row) => (
           <View key={row.key} style={styles.row}>
@@ -54,14 +55,14 @@ export function SettingsSheet({ visible, theme, settings, onChange, onResetProgr
         ))}
         <Button label="İlerlemeyi sıfırla" onPress={confirmReset} theme={theme} variant="quiet" />
         <Button label="Kapat" onPress={onClose} theme={theme} />
-      </View>
+      </ScrollView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
   scrim: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
-  sheet: { borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, gap: 14 },
+  sheet: { flexGrow: 0, maxHeight: '85%', borderTopLeftRadius: 28, borderTopRightRadius: 28 },
   title: { fontFamily: fonts.bold, fontSize: type.headline, marginBottom: 4 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   flex: { flex: 1 },

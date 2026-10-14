@@ -27,7 +27,7 @@ const PERFECT_STEPS: SoundName[] = ['perfect1', 'perfect2', 'perfect3', 'perfect
  * Sık çalan sesler için birden fazla oynatıcı tutulur; böylece hızlı art arda
  * isabetlerde bir önceki sesin kuyruğu kesilmez, üst üste biner.
  */
-const POOL: Partial<Record<SoundName, number>> = { hit: 3, perfect1: 2, perfect2: 2, perfect3: 2, perfect4: 2, perfect5: 2 };
+const POOL: Partial<Record<SoundName, number>> = { hit: 2 };
 const VOLUME: Partial<Record<SoundName, number>> = { ui: 0.5, hit: 0.9, fail: 0.85, start: 0.7 };
 const MUSIC_VOLUME = { menu: 0.45, play: 0.28 };
 
@@ -42,12 +42,17 @@ export class Feedback {
   private cursor = new Map<SoundName, number>();
   private music: AudioPlayer | null = null;
   private musicLevel: number = MUSIC_VOLUME.menu;
-  private settings: Settings = { sound: true, music: true, haptics: true, screenShake: true, motion: true };
+  private settings: Settings = { sound: true, music: true, haptics: true, screenShake: false, motion: true, lowPower: false };
+  private active = true;
+  private generation = 0;
+  private seeks = new Map<AudioPlayer, number>();
 
   async init() {
+    const generation = ++this.generation;
     // Telefon sessizdeyken çalmaz, kullanıcının kendi müziğini de durdurmaz.
     await quiet(setAudioModeAsync({ playsInSilentMode: false, interruptionMode: 'mixWithOthers' }));
-    (Object.keys(SOURCES) as SoundName[]).forEach((name) => {
+    for (const name of Object.keys(SOURCES) as SoundName[]) {
+      if (this.generation !== generation) return;
       const list: AudioPlayer[] = [];
       for (let i = 0; i < (POOL[name] ?? 1); i++) {
         try {
@@ -59,7 +64,10 @@ export class Feedback {
         }
       }
       this.players.set(name, list);
-    });
+      // Yield between decoders so startup does not block the menu's first frame.
+      await new Promise<void>((resolve) => setTimeout(resolve, 16));
+    }
+    if (this.generation !== generation) return;
     try {
       this.music = createAudioPlayer(MUSIC);
       this.music.loop = true;
@@ -83,21 +91,25 @@ export class Feedback {
 
   /** Uygulama arka plana geçince müzik durur. */
   setActive(active: boolean) {
+    this.active = active;
+    if (!active) this.players.forEach((list) => list.forEach((p) => p.pause()));
     if (!this.music) return;
     if (active) this.applyMusic();
     else this.music.pause();
   }
 
   dispose() {
+    this.generation++;
     this.players.forEach((list) => list.forEach((p) => p.remove()));
     this.players.clear();
     this.music?.remove();
     this.music = null;
+    this.seeks.clear();
   }
 
   private applyMusic() {
     if (!this.music) return;
-    if (this.settings.music) {
+    if (this.settings.music && this.active) {
       this.music.volume = this.musicLevel;
       if (!this.music.playing) this.music.play();
     } else {
@@ -106,14 +118,18 @@ export class Feedback {
   }
 
   private play(name: SoundName) {
-    if (!this.settings.sound) return;
+    if (!this.settings.sound || !this.active) return;
     const list = this.players.get(name);
     if (!list || list.length === 0) return;
     const i = ((this.cursor.get(name) ?? -1) + 1) % list.length;
     this.cursor.set(name, i);
     const player = list[i];
-    quiet(player.seekTo(0));
-    player.play();
+    const generation = this.generation;
+    const seek = (this.seeks.get(player) ?? 0) + 1;
+    this.seeks.set(player, seek);
+    quiet(player.seekTo(0).then(() => {
+      if (generation === this.generation && this.seeks.get(player) === seek && this.active && this.settings.sound) player.play();
+    }));
   }
 
   private haptic(run: () => Promise<void>) {

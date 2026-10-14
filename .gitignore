@@ -39,3 +39,9 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Local validation exports and Android diagnostics
+bundle-check*/
+diagnostics/
+__pycache__/
+*.pyc

@@ -117,7 +117,7 @@ describe('progression', () => {
   });
 
   it('tracks best score and unlocks themes by total hits', () => {
-    const { profile, report } = applyRun({ ...DEFAULT_PROFILE, totalHits: 140 }, run(20), new Date());
+    const { profile, report } = applyRun({ ...DEFAULT_PROFILE, totalHits: 25 }, run(20), new Date());
     expect(profile.best).toBe(20);
     expect(report.isNewBest).toBe(true);
     expect(report.unlockedThemes.map((t) => t.id)).toEqual(['gece']);
@@ -149,6 +149,6 @@ describe('progression', () => {
     const p = sanitizeProfile({ best: -5, totalHits: 'x', settings: { sound: false } });
     expect(p.best).toBe(0);
     expect(p.totalHits).toBe(0);
-    expect(p.settings).toEqual({ sound: false, music: true, haptics: true, screenShake: true, motion: true });
+    expect(p.settings).toEqual({ sound: false, music: true, haptics: true, screenShake: false, motion: true, lowPower: false });
   });
 });

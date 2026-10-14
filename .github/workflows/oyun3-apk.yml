@@ -1,4 +1,4 @@
-name: oyun3 APK
+name: Nabız Android APK
 
 on:
   push:
@@ -17,7 +17,6 @@ permissions:
 jobs:
   build:
     name: Build Android APK
-    if: ${{ !contains(github.event.head_commit.message, '[reuse apk]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
@@ -32,7 +31,7 @@ jobs:
           gh api --method POST
           "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA"
           -f state=pending -f context=oyun3/apk
-          -f description='Building and checking oyun3.apk'
+          -f description='Building and checking Nabız 1.1.0'
           -f target_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
 
       - uses: actions/checkout@v4
@@ -78,21 +77,21 @@ jobs:
       - name: Verify and name APK
         run: |
           mkdir -p dist diagnostics
-          cp android/app/build/outputs/apk/release/app-release.apk dist/oyun3.apk
-          python3 tools/verify_apk.py dist/oyun3.apk
+          cp android/app/build/outputs/apk/release/app-release.apk dist/nabiz.apk
+          python3 tools/verify_apk.py dist/nabiz.apk
           apksigner_path=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
-          "$apksigner_path" verify --verbose dist/oyun3.apk
-          (cd dist && sha256sum oyun3.apk > oyun3.apk.sha256)
+          "$apksigner_path" verify --verbose dist/nabiz.apk
+          (cd dist && sha256sum nabiz.apk > nabiz.apk.sha256)
 
 
       - name: Keep APK
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: oyun3-apk
+          name: nabiz-apk
           path: |
-            dist/oyun3.apk
-            dist/oyun3.apk.sha256
+            dist/nabiz.apk
+            dist/nabiz.apk.sha256
           if-no-files-found: ignore
           retention-days: 30
 
@@ -108,7 +107,6 @@ jobs:
   test_and_publish:
     name: Test APK on fresh runner and publish
     needs: build
-    if: ${{ !cancelled() && (needs.build.result == 'success' || contains(github.event.head_commit.message, '[reuse apk]')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -125,24 +123,26 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Confirm reused APK matches application source
-        if: contains(github.event.head_commit.message, '[reuse apk]')
-        run: >-
-          git diff --exit-code 3e272fb82d6d8bf59a2853e753c583aaecd4e90c HEAD --
-          . ':(exclude).github/**' ':(exclude)tools/smoke_android.py' ':(exclude)tools/verify_apk.py'
-
       - name: Download built APK
         uses: actions/download-artifact@v4
         with:
-          name: oyun3-apk
+          name: nabiz-apk
           path: dist
           github-token: ${{ github.token }}
-          run-id: ${{ contains(github.event.head_commit.message, '[reuse apk]') && 38620700567 || github.run_id }}
+          run-id: ${{ github.run_id }}
+
+      - name: Download previous version for upgrade test
+        uses: actions/download-artifact@v4
+        with:
+          name: oyun3-apk
+          path: previous
+          github-token: ${{ github.token }}
+          run-id: 38625640681
 
       - name: Check APK contents and checksum
         run: |
-          (cd dist && sha256sum -c oyun3.apk.sha256)
-          python3 tools/verify_apk.py dist/oyun3.apk
+          (cd dist && sha256sum -c nabiz.apk.sha256)
+          python3 tools/verify_apk.py dist/nabiz.apk
           df -h .
 
       - uses: actions/setup-java@v4
@@ -160,7 +160,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Test offline startup, gameplay and resume
+      - name: Test upgrade, four modes, sustained play and resume
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -169,32 +169,21 @@ jobs:
           profile: pixel_2
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
-          script: python3 tools/smoke_android.py dist/oyun3.apk
-
-      - name: Keep tested APK in this run
-        if: needs.build.result == 'skipped'
-        uses: actions/upload-artifact@v4
-        with:
-          name: oyun3-apk
-          path: |
-            dist/oyun3.apk
-            dist/oyun3.apk.sha256
-          if-no-files-found: error
-          retention-days: 30
+          script: python3 tools/smoke_android.py dist/nabiz.apk previous/oyun3.apk
 
       - name: Publish APK download
         run: |
-          tag="v1.0.0-build.$GITHUB_RUN_NUMBER"
-          gh release create "$tag" dist/oyun3.apk dist/oyun3.apk.sha256 \
+          tag="v1.1.0-build.$GITHUB_RUN_NUMBER"
+          gh release create "$tag" dist/nabiz.apk dist/nabiz.apk.sha256 \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-            --title 'Nabız — oyun3 APK' --notes-file RELEASE_NOTES.md
-          printf '## oyun3.apk\n\nOffline Android startup, first game and resume tests passed.\n' >> "$GITHUB_STEP_SUMMARY"
+            --title 'Nabız 1.1 — Yeni ritim' --notes-file RELEASE_NOTES.md
+          printf '## nabiz.apk\n\nOffline startup, upgrade, four modes, two-minute play and resume tests passed.\n' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Keep test diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: oyun3-test-diagnostics
+          name: nabiz-test-diagnostics
           path: diagnostics/
           if-no-files-found: ignore
           retention-days: 7

@@ -1,90 +1,26 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
-
 import type { Theme } from '../game/themes';
-import { darken, lighten } from '../ui/color';
-import { fonts, type } from '../ui/typography';
-
-interface Props {
-  label: string;
-  detail?: string;
-  onPress: () => void;
-  theme: Theme;
-  variant?: 'primary' | 'secondary' | 'quiet';
-  disabled?: boolean;
-  style?: StyleProp<ViewStyle>;
-}
-
-const LEDGE = { primary: 7, secondary: 5, quiet: 0 } as const;
-
-/**
- * Oyun konsolu tuşu gibi 3B buton: altta koyu bir kenar, üstte ışık alan yüz.
- * Basınca yüz kenara doğru iner.
- */
+import { alpha, lighten } from '../ui/color';
+import { fonts } from '../ui/typography';
+interface Props { label: string; detail?: string; onPress: () => void; theme: Theme; variant?: 'primary' | 'secondary' | 'quiet'; disabled?: boolean; style?: StyleProp<ViewStyle> }
 export function Button({ label, detail, onPress, theme, variant = 'secondary', disabled, style }: Props) {
-  const primary = variant === 'primary';
-  const quiet = variant === 'quiet';
-  const ledge = LEDGE[variant];
-  const face = primary
-    ? [lighten(theme.target, 0.28), theme.target, darken(theme.target, 0.08)]
-    : [lighten(theme.surface, 0.1), theme.surface, darken(theme.surface, 0.06)];
-  const ledgeColor = primary ? theme.ledge : theme.ringDark;
-  const color = primary ? '#FFFFFF' : theme.text;
-  const radius = primary ? 26 : 18;
-
+  const primary = variant === 'primary', quiet = variant === 'quiet';
   return (
-    <Pressable
-      onPress={onPress}
-      disabled={disabled}
-      accessibilityRole="button"
-      accessibilityLabel={detail ? `${label}, ${detail}` : label}
-      accessibilityState={{ disabled: !!disabled }}
-      hitSlop={6}
-      style={[{ paddingBottom: ledge, opacity: disabled ? 0.45 : 1 }, style]}
-    >
-      {({ pressed }) => {
-        const sink = pressed && !disabled ? ledge - 1 : 0;
-        return (
-          <View>
-            {!quiet && <View style={[StyleSheet.absoluteFill, { top: ledge, bottom: -ledge, borderRadius: radius, backgroundColor: ledgeColor }]} />}
-            <LinearGradient
-              colors={quiet ? ['transparent', 'transparent'] : (face as [string, string, string])}
-              start={{ x: 0.5, y: 0 }}
-              end={{ x: 0.5, y: 1 }}
-              style={[
-                styles.face,
-                primary && styles.primaryFace,
-                { borderRadius: radius, transform: [{ translateY: sink }] },
-                !quiet && { borderTopColor: lighten(primary ? theme.target : theme.surface, 0.35), borderTopWidth: 1.5 },
-              ]}
-            >
-              <View style={[styles.row, !detail && styles.centered]}>
-                <Text
-                  style={[
-                    styles.label,
-                    primary && styles.primaryLabel,
-                    { color },
-                    primary && { textShadowColor: theme.ledge, textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 0 },
-                  ]}
-                >
-                  {label}
-                </Text>
-                {detail ? <Text style={[styles.detail, { color: primary ? color : theme.muted }]}>{detail}</Text> : null}
-              </View>
-            </LinearGradient>
-          </View>
-        );
-      }}
+    <Pressable onPress={onPress} disabled={disabled} accessibilityRole="button" accessibilityLabel={label} accessibilityHint={detail} accessibilityState={{ disabled: !!disabled }}
+      style={({ pressed }) => [{ opacity: disabled ? 0.4 : pressed ? 0.8 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] }, style]}>
+      <LinearGradient colors={quiet ? ['transparent', 'transparent'] : primary ? [lighten(theme.target, 0.12), theme.target] : [theme.surface, theme.surface]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+        style={[styles.face, { borderColor: primary ? alpha('#FFFFFF', 0.18) : quiet ? 'transparent' : alpha(theme.ringLight, 0.3) }]}>
+        <View style={styles.text}><Text style={[styles.label, { color: primary ? '#FFFFFF' : theme.text }]}>{label}</Text>{detail && <Text style={[styles.detail, { color: primary ? '#FFFFFFDD' : theme.muted }]}>{detail}</Text>}</View>
+        {primary && <Text style={styles.arrow}>↗</Text>}
+      </LinearGradient>
     </Pressable>
   );
 }
-
 const styles = StyleSheet.create({
-  face: { paddingVertical: 15, paddingHorizontal: 22, minHeight: 54, justifyContent: 'center' },
-  primaryFace: { paddingVertical: 19, minHeight: 66 },
-  row: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 },
-  centered: { justifyContent: 'center' },
-  label: { fontFamily: fonts.bold, fontSize: type.body + 1 },
-  primaryLabel: { fontSize: type.title + 4, flex: 1, textAlign: 'center', letterSpacing: 0.3 },
-  detail: { fontFamily: fonts.regular, fontSize: type.small + 1 },
+  face: { minHeight: 54, paddingVertical: 14, paddingHorizontal: 20, borderRadius: 18, borderWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 },
+  text: { flex: 1, alignItems: 'center' },
+  label: { fontFamily: fonts.bold, fontSize: 17, textAlign: 'center' },
+  detail: { fontFamily: fonts.regular, fontSize: 12, marginTop: 3, textAlign: 'center' },
+  arrow: { color: '#FFFFFF', fontSize: 24 },
 });
