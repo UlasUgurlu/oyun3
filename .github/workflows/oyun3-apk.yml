@@ -12,10 +12,12 @@ concurrency:
 permissions:
   contents: write
   statuses: write
+  actions: read
 
 jobs:
-  android:
-    name: Build and test Android APK
+  build:
+    name: Build Android APK
+    if: ${{ !contains(github.event.head_commit.message, '[reuse apk]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
@@ -82,6 +84,76 @@ jobs:
           "$apksigner_path" verify --verbose dist/oyun3.apk
           (cd dist && sha256sum oyun3.apk > oyun3.apk.sha256)
 
+
+      - name: Keep APK
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oyun3-apk
+          path: |
+            dist/oyun3.apk
+            dist/oyun3.apk.sha256
+          if-no-files-found: ignore
+          retention-days: 30
+
+
+      - name: Report build failure
+        if: failure()
+        run: >-
+          gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA"
+          -f state=failure -f context=oyun3/apk
+          -f description='Android build failed'
+          -f target_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+
+  test_and_publish:
+    name: Test APK on fresh runner and publish
+    needs: build
+    if: ${{ !cancelled() && (needs.build.result == 'success' || contains(github.event.head_commit.message, '[reuse apk]')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Report test started
+        run: >-
+          gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA"
+          -f state=pending -f context=oyun3/apk
+          -f description='Testing standalone APK on fresh runner'
+          -f target_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Confirm reused APK matches application source
+        if: contains(github.event.head_commit.message, '[reuse apk]')
+        run: >-
+          git diff --exit-code 3e272fb82d6d8bf59a2853e753c583aaecd4e90c HEAD --
+          . ':(exclude).github/**' ':(exclude)tools/smoke_android.py' ':(exclude)tools/verify_apk.py'
+
+      - name: Download built APK
+        uses: actions/download-artifact@v4
+        with:
+          name: oyun3-apk
+          path: dist
+          github-token: ${{ github.token }}
+          run-id: ${{ contains(github.event.head_commit.message, '[reuse apk]') && 38620700567 || github.run_id }}
+
+      - name: Check APK contents and checksum
+        run: |
+          (cd dist && sha256sum -c oyun3.apk.sha256)
+          python3 tools/verify_apk.py dist/oyun3.apk
+          df -h .
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+
       - name: Enable emulator acceleration
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -99,15 +171,15 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
           script: python3 tools/smoke_android.py dist/oyun3.apk
 
-      - name: Keep APK
-        if: always()
+      - name: Keep tested APK in this run
+        if: needs.build.result == 'skipped'
         uses: actions/upload-artifact@v4
         with:
           name: oyun3-apk
           path: |
             dist/oyun3.apk
             dist/oyun3.apk.sha256
-          if-no-files-found: ignore
+          if-no-files-found: error
           retention-days: 30
 
       - name: Publish APK download
@@ -116,7 +188,7 @@ jobs:
           gh release create "$tag" dist/oyun3.apk dist/oyun3.apk.sha256 \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
             --title 'Nabız — oyun3 APK' --notes-file RELEASE_NOTES.md
-          printf '## oyun3.apk\n\nAndroid release APK built with embedded game code, fonts and sounds.\n\nOffline emulator smoke test passed.\n' >> "$GITHUB_STEP_SUMMARY"
+          printf '## oyun3.apk\n\nOffline Android startup, first game and resume tests passed.\n' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Keep test diagnostics
         if: always()
@@ -127,14 +199,14 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      - name: Report final build result
+      - name: Report final result
         if: always()
         env:
-          BUILD_RESULT: ${{ job.status }}
+          TEST_RESULT: ${{ job.status }}
         run: |
           state=failure
-          if [ "$BUILD_RESULT" = success ]; then state=success; fi
+          if [ "$TEST_RESULT" = success ]; then state=success; fi
           gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" \
             -f "state=$state" -f context=oyun3/apk \
-            -f "description=APK build: $BUILD_RESULT" \
+            -f "description=APK test: $TEST_RESULT" \
             -f target_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
