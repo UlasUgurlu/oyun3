@@ -99,14 +99,15 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
           script: python3 tools/smoke_android.py dist/oyun3.apk
 
-      - name: Keep verified APK
+      - name: Keep APK
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: oyun3-apk
           path: |
             dist/oyun3.apk
             dist/oyun3.apk.sha256
-          if-no-files-found: error
+          if-no-files-found: ignore
           retention-days: 30
 
       - name: Publish APK download

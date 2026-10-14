@@ -14,8 +14,12 @@ def verify(path: Path) -> None:
         assert "assets/index.android.bundle" in names, "Missing standalone JS bundle"
         assert apk.getinfo("assets/index.android.bundle").file_size > 100_000, "Empty game bundle"
         for abi in ("arm64-v8a", "x86_64"):
-            for library in ("libreactnative.so", "libhermes.so", "librnskia.so"):
+            for library in ("libreactnative.so", "librnskia.so"):
                 assert f"lib/{abi}/{library}" in names, f"Missing {abi}/{library}"
+            assert any(
+                f"lib/{abi}/{library}" in names
+                for library in ("libhermesvm.so", "libhermes.so")
+            ), f"Missing {abi}/Hermes runtime"
         assert sum(name.endswith(".ttf") for name in names) >= 4, "Missing bundled fonts"
         assert sum(name.endswith(".wav") for name in names) >= 11, "Missing bundled sound effects"
         assert any(name.endswith(".m4a") for name in names), "Missing bundled music"
