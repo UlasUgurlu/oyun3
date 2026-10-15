@@ -15,7 +15,7 @@ export function GameOverPanel({ theme, report, canRetry, suggestBreak, onRetry, 
     <Text style={[styles.score, { color: theme.text }]}>{s.score}</Text>
     <Text style={[styles.sub, { color: theme.muted }]}>{finished ? 'Antrenman tamamlandı' : `Hedefi ${s.offDeg.toFixed(1)}° ile ${s.timing === 'early' ? 'erken' : 'geç'} kaçırdın`}</Text>
     <View style={[styles.stats, { backgroundColor: theme.surface, borderColor: alpha(theme.ringLight, 0.35) }]}>
-      {[['İSABET', s.hits], ['MÜKEMMEL', s.perfects], ['EN UZUN SERİ', s.bestCombo]].map(([label, value]) => <View key={label} style={styles.stat}><Text style={[styles.value, { color: theme.text }]}>{value}</Text><Text style={[styles.label, { color: theme.muted }]}>{label}</Text></View>)}
+      {[['İSABET', s.hits], ['MÜKEMMEL', s.perfects], ['EN UZUN SERİ', s.bestCombo]].map(([label, value]) => <View key={label} accessible accessibilityLabel={`${label}: ${value}`} style={styles.stat}><Text style={[styles.value, { color: theme.text }]}>{value}</Text><Text style={[styles.label, { color: theme.muted }]}>{label}</Text></View>)}
     </View>
     <Text style={[styles.xp, { color: theme.perfect }]}>+{report.xpGained} XP {report.isNewBest && s.score > 0 ? '· Kişisel rekor' : `· Rekor ${report.previousBest}`}</Text>
     {report.completedMissions.map((name) => <Text key={name} style={[styles.sub, { color: theme.perfect }]}>✓ Görev tamamlandı: {name}</Text>)}

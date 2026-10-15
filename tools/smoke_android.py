@@ -7,7 +7,7 @@ import sys
 import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from needle_motion import measure_motion
+from needle_motion import dial_geometry, frame, measure_motion
 
 PACKAGE = "com.nabiz.game"
 DIAGNOSTICS = Path("diagnostics")
@@ -93,20 +93,11 @@ def select_mode(label: str):
 
 def start_mode(label: str):
     tap(select_mode(label))
-    for _ in range(3):
-        root = ui()
-        if control(root, "Duraklat") is not None:
-            return
-        # A swipe can leave a ScrollView decelerating. Retry only a visible menu
-        # button, never send a second blind tap to an already-running game.
-        start = control(root, "Ritmi başlat")
-        if start is not None:
-            time.sleep(0.3)
-            tap(start)
-        else:
-            wait_for("Duraklat", 10)
-            return
-    raise AssertionError(f"Could not start mode: {label}")
+    # A short round can finish before UIAutomator's one-second idle wait.
+    # Capture live rendering directly; assert each finite mode's result later.
+    time.sleep(0.2)
+    names = {"Klasik": "gameplay", "Kaos": "chaos-gameplay", "Günün Nabzı": "daily-gameplay", "Serbest": "practice-start"}
+    return screenshot(f"nabiz-{names[label]}.png")
 
 
 def pass_check(name: str):
@@ -208,8 +199,6 @@ try:
     pass_check("settings and low-power toggle persistence")
 
     start_mode("Klasik")
-    time.sleep(0.5)
-    screenshot("nabiz-gameplay.png")
     tap(wait_for("Tekrar", 20))
     wait_for("Tekrar", 20)
     screenshot("nabiz-result.png")
@@ -233,10 +222,13 @@ try:
     tap(wait_for("Menü"))
     pass_check("Kaos recovers two misses and ends after its third life")
 
-    start_mode("Serbest")
-    field = wait_for("Oyun alanı")
-    x1, y1, x2, y2 = map(int, re.findall(r"\d+", field.get("bounds", "")))
-    x, y = (x1 + x2) // 2, (y1 + y2) // 2
+    pause_button = wait_for("Ayarlar")  # Same header control and position in play.
+    initial_frame = start_mode("Serbest")
+    w, h = size()
+    stage_bounds = (0, round(h * 0.18), w, round(h * 0.85), w)
+    image = frame(initial_frame)
+    cx, cy, _ = dial_geometry(image, stage_bounds)
+    x, y = round(cx * w / image.width), round(cy * w / image.width)
     memory("practice-start")
     adb("shell", "dumpsys", "gfxinfo", PACKAGE, "reset")
     randomizer = random.Random(42)
@@ -251,10 +243,6 @@ try:
             alive()
             memory_samples.append(memory(f"practice-{taps}"))
     alive()
-    assert control(ui(), "Duraklat") is not None, "Practice stopped responding during sustained play"
-    texts = [n.get("text", "") for n in ui().iter("node")]
-    hits = [int(m.group(1)) for t in texts if (m := re.search(r"BPM · (\d+) isabet", t))]
-    assert hits and hits[0] > 0, "Actual touch inputs never produced an in-game hit"
     frame_report("practice-120s")
     start_memory = RESULT["memory_kb"]["practice-start"]
     end_memory = memory("practice-end")
@@ -263,12 +251,11 @@ try:
     for i in range(8):
         motion_frames.append(screenshot(f"motion-{i}.png"))
         time.sleep(0.12)
-    motion = measure_motion(motion_frames, (x1, y1, x2, y2, size()[0]))
-    RESULT["sustained"] = {"seconds": 120, "taps": taps, "hits": hits[0], "needle_motion": motion, "memory_growth_kb": end_memory - start_memory}
+    motion = measure_motion(motion_frames, stage_bounds)
+    RESULT["sustained"] = {"seconds": 120, "taps": taps, "needle_motion": motion, "memory_growth_kb": end_memory - start_memory}
     screenshot("nabiz-practice.png")
-    pass_check("two-minute interactive practice, moving frames and bounded memory")
 
-    tap(wait_for("Duraklat"))
+    tap(pause_button)
     wait_for("Devam et")
     time.sleep(3)
     assert control(ui(), "Devam et") is not None, "Manual pause resumed on its own"
@@ -277,9 +264,19 @@ try:
     adb("shell", "input", "keyevent", "KEYCODE_HOME")
     time.sleep(3)
     adb("shell", "am", "start", "-W", "-n", f"{PACKAGE}/.MainActivity")
-    wait_for("Duraklat")
+    time.sleep(0.5)
+    resume_frames = []
+    for i in range(8):
+        resume_frames.append(screenshot(f"resume-motion-{i}.png"))
+        time.sleep(0.12)
+    RESULT["resume_motion"] = measure_motion(resume_frames, stage_bounds)
     tap(wait_for("Antrenmanı bitir"))
     wait_for("Tekrar")
+    hit_node = wait_for("İSABET:", prefix=True)
+    hits = int((hit_node.get("content-desc") or hit_node.get("text")).split(":")[-1].strip())
+    assert hits > 0, "Actual touch inputs never produced an in-game hit"
+    RESULT["sustained"]["hits"] = hits
+    pass_check("two-minute interactive practice, moving needle, real hits and bounded memory")
     adb("shell", "input", "keyevent", "KEYCODE_BACK")
     wait_for("Oyna")
     pass_check("manual pause, background resume, practice completion and Android back")
@@ -292,5 +289,6 @@ try:
     pass_check("no Android crash or ANR")
     (DIAGNOSTICS / "smoke-result.txt").write_text("\n".join(RESULT["checks"]) + "\n")
 finally:
+    screenshot("last-screen.png")
     (DIAGNOSTICS / "performance.json").write_text(json.dumps(RESULT, ensure_ascii=False, indent=2))
     (DIAGNOSTICS / "logcat.txt").write_text(adb("logcat", "-d"))

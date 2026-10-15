@@ -13,12 +13,12 @@ export function Brand({ theme, compact = false }: { theme: Theme; compact?: bool
   );
 }
 const styles = StyleSheet.create({
-  hero: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16, paddingVertical: 12 },
+  hero: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16, paddingVertical: 10 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   center: { alignItems: 'flex-start' },
-  logo: { width: 84, height: 84, borderRadius: 24 },
+  logo: { width: 64, height: 64, borderRadius: 20 },
   smallLogo: { width: 36, height: 36, borderRadius: 10 },
-  title: { fontFamily: fonts.heavy, fontSize: 44, lineHeight: 52, includeFontPadding: false, letterSpacing: -2 },
+  title: { fontFamily: fonts.heavy, fontSize: 40, lineHeight: 48, includeFontPadding: false, letterSpacing: -2 },
   smallTitle: { fontFamily: fonts.heavy, fontSize: 24, letterSpacing: -0.7 },
-  tagline: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 20, marginTop: 2 },
+  tagline: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 18, marginTop: 2 },
 });

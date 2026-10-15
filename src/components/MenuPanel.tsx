@@ -77,15 +77,15 @@ export function MenuPanel({ theme, profile, now, selectedMode, onSelectMode, onP
 }
 function Progress({ amount, color, track }: { amount: number; color: string; track: string }) { return <View style={[styles.progress, { backgroundColor: track }]}><View style={[styles.progressFill, { backgroundColor: color, width: `${Math.max(0, Math.min(100, amount * 100))}%` }]} /></View>; }
 const styles = StyleSheet.create({
-  fill: { flex: 1 }, content: { gap: 13, paddingTop: 6, paddingBottom: 18 },
+  fill: { flex: 1 }, content: { gap: 10, paddingTop: 6, paddingBottom: 18 },
   start: { paddingVertical: 10 },
-  stats: { flexDirection: 'row', borderWidth: 1, borderRadius: 18, paddingVertical: 12 },
-  stat: { flex: 1, alignItems: 'center' }, statValue: { fontFamily: fonts.bold, fontSize: 23, fontVariant: ['tabular-nums'] },
+  stats: { flexDirection: 'row', borderWidth: 1, borderRadius: 18, paddingVertical: 8 },
+  stat: { flex: 1, alignItems: 'center' }, statValue: { fontFamily: fonts.bold, fontSize: 21, fontVariant: ['tabular-nums'] },
   caption: { fontFamily: fonts.medium, fontSize: 9, letterSpacing: 1.2, marginTop: 3 },
   sectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   section: { fontFamily: fonts.bold, fontSize: 20, marginTop: 5 }, grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  mode: { width: '48%', flexGrow: 1, padding: 13, borderRadius: 18, borderWidth: 1.5, gap: 5 },
-  modeTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, symbol: { fontSize: 25 },
+  mode: { width: '48%', flexGrow: 1, padding: 10, borderRadius: 18, borderWidth: 1.5, gap: 3 },
+  modeTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, symbol: { fontSize: 22 },
   selectDot: { width: 6, height: 6, borderRadius: 3 }, modeName: { fontFamily: fonts.bold, fontSize: 16 },
   tiny: { fontFamily: fonts.medium, fontSize: 9, letterSpacing: 0.4 }, modeDetail: { fontFamily: fonts.regular, fontSize: 13, lineHeight: 19, minHeight: 38 },
   small: { fontFamily: fonts.regular, fontSize: 12, lineHeight: 18 }, helpButton: { padding: 8, alignItems: 'center' },
