@@ -35,14 +35,14 @@ export const Dial = memo(function Dial({ size, theme, target, width, decoy, scor
           <LinearGradient id="signal" x1="0" y1="0" x2="1" y2="1"><Stop offset="0" stopColor={theme.perfect} /><Stop offset="1" stopColor={theme.target} /></LinearGradient>
         </Defs>
         <Circle cx={c} cy={c} r={r + w + 7} fill="none" stroke={alpha(theme.ringLight, 0.25)} strokeWidth="1" />
-        {TICKS.map((a, i) => <Line key={i} x1={c + (r + w + (i % 4 === 0 ? 11 : 15)) * Math.cos(a)} y1={c + (r + w + (i % 4 === 0 ? 11 : 15)) * Math.sin(a)} x2={c + (r + w + 19) * Math.cos(a)} y2={c + (r + w + 19) * Math.sin(a)} stroke={alpha(theme.muted, i % 4 === 0 ? 0.7 : 0.25)} strokeWidth={i % 4 === 0 ? 2 : 1} />)}
+        {TICKS.map((a, i) => <Line key={i} x1={c + (size * (i % 4 === 0 ? 0.457 : 0.468)) * Math.cos(a)} y1={c + (size * (i % 4 === 0 ? 0.457 : 0.468)) * Math.sin(a)} x2={c + (size * 0.483) * Math.cos(a)} y2={c + (size * 0.483) * Math.sin(a)} stroke={alpha(theme.muted, i % 4 === 0 ? 0.7 : 0.25)} strokeWidth={i % 4 === 0 ? 2 : 1} />)}
         <Circle cx={c} cy={c} r={r} fill="none" stroke="url(#metal)" strokeWidth={w} />
         <Circle cx={c} cy={c} r={r - w} fill={alpha(theme.surface, 0.48)} stroke={alpha(theme.ringLight, 0.3)} strokeWidth="1" />
         {decoy !== null && <Path d={arcPath(c, r, decoy - width / 2, decoy + width / 2)} fill="none" stroke="#B291FF" strokeWidth={w * 0.8} strokeDasharray="3 5" />}
         <Path d={arcPath(c, r, target - width / 2, target + width / 2)} fill="none" stroke={alpha(theme.target, 0.15)} strokeWidth={w * 1.7} strokeLinecap="round" />
         <Path d={arcPath(c, r, target - width / 2, target + width / 2)} fill="none" stroke="url(#signal)" strokeWidth={w} strokeLinecap="butt" />
         <Path d={arcPath(c, r, target - width * 0.125, target + width * 0.125)} fill="none" stroke={theme.needle} strokeWidth={w * 0.38} />
-        <Path d={`M ${c - 38} ${c + 57} L ${c - 20} ${c + 57} L ${c - 11} ${c + 49} L ${c - 3} ${c + 65} L ${c + 6} ${c + 45} L ${c + 16} ${c + 57} L ${c + 38} ${c + 57}`} fill="none" stroke={theme.target} strokeWidth="2" strokeLinejoin="round" />
+        <Path d={`M ${c - 38} ${c + size * 0.2695} L ${c - 20} ${c + size * 0.2695} L ${c - 11} ${c + size * 0.2695 - size * 0.027} L ${c - 3} ${c + size * 0.2695 + size * 0.027} L ${c + 6} ${c + size * 0.2695 - size * 0.04} L ${c + 16} ${c + size * 0.2695} L ${c + 38} ${c + size * 0.2695}`} fill="none" stroke={theme.target} strokeWidth="2" strokeLinejoin="round" />
       </Svg>
       <Animated.View style={[styles.ripple, { left: c - r, top: c - r, width: r * 2, height: r * 2, borderRadius: r, borderColor: theme.perfect }, rippleStyle]} />
       <Animated.View style={[StyleSheet.absoluteFill, needleStyle]}>
@@ -51,7 +51,7 @@ export const Dial = memo(function Dial({ size, theme, target, width, decoy, scor
       </Animated.View>
       <View style={[StyleSheet.absoluteFill, styles.center]}>
         <Text style={[styles.caption, { color: theme.muted }]}>NABIZ PUANI</Text>
-        <Animated.Text style={[styles.score, { color: theme.text, fontSize: size * 0.21 }, scoreStyle]}>{score}</Animated.Text>
+        <Animated.Text style={[styles.score, { color: theme.text, fontSize: size * 0.21, lineHeight: size * 0.27 }, scoreStyle]}>{score}</Animated.Text>
         <Text style={[styles.combo, { color: combo > 1 ? theme.perfect : theme.muted }]}>{combo > 1 ? `SERİ ×${combo}` : 'RİTMİ YAKALA'}</Text>
       </View>
     </View>

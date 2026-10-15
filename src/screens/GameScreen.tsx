@@ -17,6 +17,7 @@ import { applyRun, beginDailyAttempt, dailyAttemptsLeft, type RunReport, type Ru
 import { getTheme, isUnlocked } from '../game/themes';
 import { useNabizGame } from '../hooks/useNabizGame';
 import { useProfile } from '../hooks/useProfile';
+import { useLocalDay } from '../hooks/useLocalDay';
 import { alpha } from '../ui/color';
 import { fonts } from '../ui/typography';
 
@@ -28,6 +29,8 @@ export function GameScreen() {
   const [report, setReport] = useState<RunReport | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectedMode, setSelectedMode] = useState<GameMode>('classic');
+  const [stageHeight, setStageHeight] = useState(0);
+  const today = useLocalDay();
   const [sessionStart] = useState(() => Date.now());
   const [suggestBreak, setSuggestBreak] = useState(false);
   const recordTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -49,7 +52,7 @@ export function GameScreen() {
     if (recordTimer.current) clearTimeout(recordTimer.current);
     setReport(null); setSelectedMode(mode); game.start(mode);
   };
-  const attempts = dailyAttemptsLeft(profile, new Date());
+  const attempts = dailyAttemptsLeft(profile, today);
   const canRetry = game.mode !== 'daily' || attempts > 0;
   const share = () => {
     if (!report) return;
@@ -70,7 +73,7 @@ export function GameScreen() {
   if (!ready) return <View style={[styles.root, { backgroundColor: theme.background }]} />;
   const playing = phase === 'playing';
   const effects = profile.settings.motion && !profile.settings.lowPower;
-  const dialSize = Math.max(220, Math.min(width - 40, height * 0.43, 370));
+  const dialSize = Math.max(160, Math.min(width - 40, (stageHeight || height * 0.43) - 64, 370));
   const anomaly = ANOMALIES[game.hud.anomaly];
   return (
     <View style={[styles.root, { backgroundColor: theme.background, paddingTop: insets.top + 6, paddingBottom: Math.max(8, insets.bottom) }]}>
@@ -80,14 +83,14 @@ export function GameScreen() {
         {phase === 'menu' ? <Text style={[styles.eyebrow, { color: theme.muted }]}>REFLEKS · RİTİM · ODAK</Text> : <Brand theme={theme} compact />}
         <Pressable onPress={playing ? game.pause : () => setSettingsOpen(true)} hitSlop={10} accessibilityRole="button" accessibilityLabel={playing ? 'Duraklat' : 'Ayarlar'} style={[styles.headerButton, { borderColor: alpha(theme.ringLight, 0.35), backgroundColor: alpha(theme.surface, 0.5) }]}><Text style={[styles.headerText, { color: theme.text }]}>{playing ? 'Ⅱ' : '⚙'}  {playing ? 'Duraklat' : 'Ayarlar'}</Text></Pressable>
       </View>
-      {phase === 'menu' && <MenuPanel theme={theme} profile={profile} selectedMode={selectedMode} onSelectMode={setSelectedMode} onPlay={play} onSelectTheme={selectTheme} />}
+      {phase === 'menu' && <MenuPanel theme={theme} profile={profile} now={today} selectedMode={selectedMode} onSelectMode={setSelectedMode} onPlay={play} onSelectTheme={selectTheme} />}
       {playing && <>
         <View style={styles.hud}>
           <View><Text style={[styles.modeLabel, { color: theme.text }]}>{modeName(game.mode)}</Text><Text style={[styles.hudDetail, { color: theme.muted }]}>{game.hud.bpm} BPM · {game.hud.hits} isabet</Text></View>
           <Text style={[styles.life, { color: theme.target }]}>{game.mode === 'chaos' ? '♥'.repeat(game.hud.lives) + '♡'.repeat(3 - game.hud.lives) : game.mode === 'zen' ? '∞' : game.hud.shields ? '◇ Kalkan' : '◇ Son şans'}</Text>
         </View>
         <View style={[styles.rule, { backgroundColor: alpha(theme.surface, 0.8), borderColor: alpha(game.hud.anomaly === 'none' ? theme.ringLight : theme.target, 0.35) }]}><View style={[styles.signal, { backgroundColor: game.hud.anomaly === 'decoy' ? '#B291FF' : theme.target }]} /><View style={styles.flex}><Text style={[styles.ruleTitle, { color: theme.text }]}>{game.hud.focused ? 'Odak aktif' : game.mode === 'zen' ? 'Özgür ritim' : anomaly.name}</Text><Text style={[styles.hudDetail, { color: theme.muted }]}>{game.hud.focused ? 'Bu hedefte zaman daha yavaş akıyor.' : game.mode === 'zen' ? 'Kaçırsan da devam edersin. Acele etme.' : game.hud.anomaly === 'decoy' ? 'Mor, çizgili yay tuzak. Düz, renkli yayı yakala!' : anomaly.detail}</Text></View></View>
-        <Pressable onPressIn={game.tap} disabled={game.paused} accessibilityRole="button" accessibilityLabel="Oyun alanı" accessibilityHint="İbre renkli yayın içindeyken dokun." style={styles.stage}>
+        <Pressable onPressIn={game.tap} disabled={game.paused} accessible accessibilityRole="button" accessibilityLabel="Oyun alanı" accessibilityHint="İbre renkli yayın içindeyken dokun." onLayout={(e) => setStageHeight(e.nativeEvent.layout.height)} style={styles.stage}>
           <Animated.View style={shakeStyle} pointerEvents="none">
             <Dial size={dialSize} theme={theme} target={game.arc.target} width={game.arc.width} decoy={game.arc.decoy} score={game.hud.score} combo={game.hud.combo} visuals={game.visuals} effects={effects} />
           </Animated.View>
@@ -114,7 +117,7 @@ const styles = StyleSheet.create({
   modeLabel: { fontFamily: fonts.bold, fontSize: 22 }, hudDetail: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 16, marginTop: 3 },
   life: { fontFamily: fonts.bold, fontSize: 19, letterSpacing: 2 }, rule: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, padding: 14, borderRadius: 16 },
   signal: { width: 6, height: 28, borderRadius: 3 }, ruleTitle: { fontFamily: fonts.bold, fontSize: 13 },
-  stage: { flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 285 }, tapHint: { fontFamily: fonts.medium, fontSize: 8, letterSpacing: 1.8, marginTop: 4 },
+  stage: { flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 200 }, tapHint: { fontFamily: fonts.medium, fontSize: 8, letterSpacing: 1.8, marginTop: 4 },
   focus: { borderWidth: 1, borderRadius: 18, padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginVertical: 10 },
   focusTitle: { fontFamily: fonts.bold, fontSize: 17 }, focusCells: { flexDirection: 'row', gap: 4 },
   cell: { width: 9, height: 24, borderRadius: 3 }, pause: { alignItems: 'center', justifyContent: 'center', padding: 28 },

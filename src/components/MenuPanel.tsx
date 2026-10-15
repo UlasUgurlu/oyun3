@@ -1,27 +1,27 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { MODES, type GameMode } from '../game/modes';
-import { MISSIONS, dailyAttemptsLeft, missionsFor, rankFor, visibleStreak, type Profile } from '../game/progression';
+import { MISSIONS, dailyAttemptsLeft, missionsFor, rankFor, rollDaily, visibleStreak, type Profile } from '../game/progression';
 import { THEMES, isUnlocked, type Theme } from '../game/themes';
 import { alpha } from '../ui/color';
 import { fonts } from '../ui/typography';
 import { Brand } from './Brand';
 import { Button } from './Button';
 
-interface Props { theme: Theme; profile: Profile; selectedMode: GameMode; onSelectMode: (m: GameMode) => void; onPlay: (m: GameMode) => void; onSelectTheme: (id: string) => void }
-export function MenuPanel({ theme, profile, selectedMode, onSelectMode, onPlay, onSelectTheme }: Props) {
+interface Props { theme: Theme; profile: Profile; now: Date; selectedMode: GameMode; onSelectMode: (m: GameMode) => void; onPlay: (m: GameMode) => void; onSelectTheme: (id: string) => void }
+export function MenuPanel({ theme, profile, now, selectedMode, onSelectMode, onPlay, onSelectTheme }: Props) {
   const [tab, setTab] = useState<'play' | 'missions' | 'themes'>('play');
   const [help, setHelp] = useState(false);
-  const now = new Date(), rank = rankFor(profile.xp), missions = missionsFor(profile, now);
+  const rank = rankFor(profile.xp), missions = missionsFor(profile, now);
   const mode = MODES.find((m) => m.id === selectedMode)!;
   const attempts = dailyAttemptsLeft(profile, now);
   const card = { backgroundColor: alpha(theme.surface, 0.8), borderColor: alpha(theme.ringLight, 0.3) };
   return (
     <View style={styles.fill}>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+      <ScrollView key={tab} showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         <Brand theme={theme} />
         <View style={[styles.stats, card]}>
-          {[['EN İYİ', profile.best], ['SEVİYE', rank.level], ['İSABET', profile.totalHits]].map(([label, value]) => <View key={label} style={styles.stat}><Text style={[styles.statValue, { color: theme.text }]}>{value}</Text><Text style={[styles.caption, { color: theme.muted }]}>{label}</Text></View>)}
+          {[[`${selectedMode === 'daily' ? 'GÜNLÜK' : mode.name.toLocaleUpperCase('tr-TR')} REKORU`, profile.modeBests[selectedMode]], ['SEVİYE', rank.level], ['İSABET', profile.totalHits]].map(([label, value]) => <View key={label} style={styles.stat}><Text style={[styles.statValue, { color: theme.text }]}>{value}</Text><Text style={[styles.caption, { color: theme.muted }]}>{label}</Text></View>)}
         </View>
         {tab === 'play' && <>
           <View style={styles.sectionRow}><Text style={[styles.section, { color: theme.text }]}>Ritmini seç</Text><Text style={[styles.caption, { color: theme.muted }]}>4 FARKLI MOD</Text></View>
@@ -36,7 +36,6 @@ export function MenuPanel({ theme, profile, selectedMode, onSelectMode, onPlay, 
             })}
           </View>
           <Text style={[styles.modeDetail, { color: theme.muted }]}>{mode.detail}{selectedMode === 'daily' ? ` ${attempts} deneme kaldı.` : ''}</Text>
-          <Button label="Ritmi başlat" detail={selectedMode === 'daily' ? `Bugünün rekoru: ${profile.daily.dayBest} • Seri ${visibleStreak(profile, now)}` : `${mode.name} rekorun: ${profile.modeBests[selectedMode]}`} onPress={() => onPlay(selectedMode)} theme={theme} variant="primary" disabled={selectedMode === 'daily' && attempts === 0} />
           <Pressable accessibilityRole="button" accessibilityLabel="Nasıl oynanır?" onPress={() => setHelp(!help)} style={styles.helpButton}><Text style={[styles.helpLabel, { color: theme.muted }]}>{help ? 'Rehberi kapat ↑' : 'Nasıl oynanır? ↓'}</Text></Pressable>
           {help && <View style={[styles.help, card]}>
             <Text style={[styles.helpText, { color: theme.text }]}>01   İbre renkli yayın içindeyken oyun alanına dokun.</Text>
@@ -68,6 +67,7 @@ export function MenuPanel({ theme, profile, selectedMode, onSelectMode, onPlay, 
         </>}
         <Text style={[styles.footer, { color: theme.muted }]}>NABIZ 1.1 · ÇEVRİMDIŞI OYNA</Text>
       </ScrollView>
+      {tab === 'play' && <View style={styles.start}><Button label="Ritmi başlat" detail={selectedMode === 'daily' ? `Bugünün rekoru: ${rollDaily(profile, now).daily.dayBest} • Seri ${visibleStreak(profile, now)}` : `${mode.name} • Rekor ${profile.modeBests[selectedMode]}`} onPress={() => onPlay(selectedMode)} theme={theme} variant="primary" disabled={selectedMode === 'daily' && attempts === 0} /></View>}
       <View style={[styles.tabs, { backgroundColor: theme.background, borderColor: alpha(theme.ringLight, 0.25) }]}>
         {([{ id: 'play', label: 'Oyna', icon: '◎' }, { id: 'missions', label: 'Görevler', icon: '✦' }, { id: 'themes', label: 'Koleksiyon', icon: '◇' }] as const).map((t) =>
           <Pressable key={t.id} onPress={() => setTab(t.id)} accessibilityRole="button" accessibilityLabel={t.label} accessibilityState={{ selected: tab === t.id }} style={styles.tab}><Text style={[styles.tabIcon, { color: tab === t.id ? theme.target : theme.muted }]}>{t.icon}</Text><Text style={[styles.tabLabel, { color: tab === t.id ? theme.text : theme.muted }]}>{t.label}</Text></Pressable>)}
@@ -78,6 +78,7 @@ export function MenuPanel({ theme, profile, selectedMode, onSelectMode, onPlay, 
 function Progress({ amount, color, track }: { amount: number; color: string; track: string }) { return <View style={[styles.progress, { backgroundColor: track }]}><View style={[styles.progressFill, { backgroundColor: color, width: `${Math.max(0, Math.min(100, amount * 100))}%` }]} /></View>; }
 const styles = StyleSheet.create({
   fill: { flex: 1 }, content: { gap: 13, paddingTop: 6, paddingBottom: 18 },
+  start: { paddingVertical: 10 },
   stats: { flexDirection: 'row', borderWidth: 1, borderRadius: 18, paddingVertical: 12 },
   stat: { flex: 1, alignItems: 'center' }, statValue: { fontFamily: fonts.bold, fontSize: 23, fontVariant: ['tabular-nums'] },
   caption: { fontFamily: fonts.medium, fontSize: 9, letterSpacing: 1.2, marginTop: 3 },

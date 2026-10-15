@@ -17,6 +17,7 @@ permissions:
 jobs:
   build:
     name: Build Android APK
+    if: ${{ !contains(github.event.head_commit.message, '[reuse native]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
@@ -104,9 +105,110 @@ jobs:
           -f description='Android build failed'
           -f target_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
 
+  bundle:
+    name: Compile code-only update against verified native build
+    if: ${{ contains(github.event.head_commit.message, '[reuse native]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: '1'
+      EXPO_NO_TELEMETRY: '1'
+      NODE_OPTIONS: --max-old-space-size=4096
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Report update started
+        run: >-
+          gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA"
+          -f state=pending -f context=oyun3/apk
+          -f description='Compiling and signing latest Nabız code'
+          -f target_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools build-tools;36.0.0'
+
+      - name: Download native base from successful Gradle build
+        uses: actions/download-artifact@v4
+        with:
+          name: nabiz-apk
+          path: native-base
+          github-token: ${{ github.token }}
+          run-id: 38654911871
+
+      - name: Check code-only scope and source
+        run: |
+          python3 -m pip install --disable-pip-version-check Pillow
+          python3 tools/rebundle_apk.py guard 0fb9b7948c6e4a9207ecc2998b0823b829c6fa33
+          npm ci --no-audit --no-fund
+          npx expo install --check
+          npm run typecheck
+          npm run lint
+          npm test -- --runInBand
+
+      - name: Compile latest code with native release Hermes settings
+        run: |
+          npx expo prebuild --platform android --clean --no-install
+          npx expo export:embed --entry-file index.ts --platform android --dev false --minify false \
+            --bundle-output dist/index.android.js --assets-dest dist/res --max-workers 2
+          node_modules/hermes-compiler/hermesc/linux64-bin/hermesc -O -w -emit-binary \
+            -out dist/index.android.bundle dist/index.android.js
+
+      - name: Re-embed, align, sign and verify APK
+        run: |
+          build_tools="$ANDROID_HOME/build-tools/36.0.0"
+          "$build_tools/apksigner" verify --print-certs native-base/nabiz.apk > dist/base-certificate.txt
+          "$build_tools/aapt2" dump resources native-base/nabiz.apk > dist/resources-table.txt
+          python3 tools/rebundle_apk.py repack native-base/nabiz.apk dist/index.android.bundle \
+            dist/res dist/resources-table.txt dist/unsigned.apk \
+            eb22ff748a424be72386d2a0216596c719ce46600bafeb5d95149c9b7224bdce
+          "$build_tools/zipalign" -P 16 -f 4 dist/unsigned.apk dist/aligned.apk
+          "$build_tools/apksigner" sign --ks android/app/debug.keystore --ks-key-alias androiddebugkey \
+            --ks-pass pass:android --key-pass pass:android --v1-signing-enabled false \
+            --v2-signing-enabled true --v3-signing-enabled false --v4-signing-enabled false \
+            --out dist/nabiz.apk dist/aligned.apk
+          "$build_tools/apksigner" verify --verbose --print-certs dist/nabiz.apk > dist/new-certificate.txt
+          grep 'certificate SHA-256 digest:' dist/base-certificate.txt > dist/base-digest.txt
+          grep 'certificate SHA-256 digest:' dist/new-certificate.txt > dist/new-digest.txt
+          diff dist/base-digest.txt dist/new-digest.txt
+          "$build_tools/zipalign" -c -P 16 4 dist/nabiz.apk
+          python3 tools/rebundle_apk.py compare native-base/nabiz.apk dist/nabiz.apk dist/index.android.bundle
+          python3 tools/verify_apk.py dist/nabiz.apk
+          (cd dist && sha256sum nabiz.apk > nabiz.apk.sha256)
+
+      - name: Keep APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: nabiz-apk
+          path: |
+            dist/nabiz.apk
+            dist/nabiz.apk.sha256
+          retention-days: 30
+
+      - name: Report update failure
+        if: failure()
+        run: >-
+          gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA"
+          -f state=failure -f context=oyun3/apk -f description='Code-only APK update failed'
+          -f target_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+
   test_and_publish:
     name: Test APK on fresh runner and publish
-    needs: build
+    needs: [build, bundle]
+    if: ${{ always() && !cancelled() && (needs.build.result == 'success' || needs.bundle.result == 'success') }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -156,6 +258,7 @@ jobs:
 
       - name: Enable emulator acceleration
         run: |
+          python3 -m pip install --disable-pip-version-check Pillow
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
